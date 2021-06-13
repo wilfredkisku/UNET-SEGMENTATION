@@ -50,7 +50,7 @@ def build_unet(input_shape):
     return model
 
 if __name__ == "__main__":
-
+    #code
     input_shape = (512, 512, 9)
     model = build_unet(input_shape)
     model.summary()
