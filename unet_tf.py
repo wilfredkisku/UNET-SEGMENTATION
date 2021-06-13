@@ -54,4 +54,22 @@ if __name__ == "__main__":
     input_shape = (512, 512, 9)
     model = build_unet(input_shape)
     model.summary()
-    plot_model(model, to_file='data/diag.png', show_shapes=True)
+    
+    #compile, fit and train the model
+    model.compile(optimizer = 'adam', loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+    model_history =  model.fit(train_dataset, epochs=EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VALIDATION_STEPS, validation_data=test_dataset, callbacks=[DisplayCallback()])
+
+    #after data plotting
+    #plot_model(model, to_file='data/diag.png', show_shapes=True)
+    #loss = model_history.history['loss']
+    #val_loss = model_history.history['val_loss']
+
+    #plt.figure()
+    #plt.plot(model_history.epoch, loss, 'r', label='Training loss')
+    #plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
+    #plt.title('Training and Validation Loss')
+    #plt.xlabel('Epoch')
+    #plt.ylabel('Loss Value')
+    #plt.ylim([0, 1])
+    #plt.legend()
+    #plt.show()
