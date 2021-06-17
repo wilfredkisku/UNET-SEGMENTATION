@@ -15,6 +15,8 @@ dirs_f2 = '/home/wilfred/Datasets/Motion/final_3/f2'
 dirs_f3 = '/home/wilfred/Datasets/Motion/final_3/f3'
 dirs_f4 = '/home/wilfred/Datasets/Motion/final_3/f4'
 dest = '/home/wilfred/Datasets/Motion/final_processed_512_512'
+train_dir = '/home/wilfred/Datasets/Motion/final_processed_512_512/train'
+test_dir = '/home/wilfred/Datasets/Motion/final_processed_512_512/test'
 num = 4
 
 def curate_f1():
@@ -42,6 +44,7 @@ def curate_f1():
                     ##addition
                     im_f = cv2.flip(im, 1)
                     cv2.imwrite(dest_f+'/'+img.split('/')[-1], im_f)
+    print('Curated f1')
     return None
 
 def curate_f2():
@@ -69,6 +72,7 @@ def curate_f2():
                     ##addition
                     im_f = cv2.flip(im, 1)
                     cv2.imwrite(dest_f+'/'+img.split('/')[-1], im_f)
+    print('Curated f2')
     return None
 
 def curate_f3():
@@ -96,6 +100,7 @@ def curate_f3():
                     ##addition
                     im_f = cv2.flip(im, 1)
                     cv2.imwrite(dest_f+'/'+img.split('/')[-1], im_f)
+    print('Curated f3')
     return None
 
 def curate_f4():
@@ -124,6 +129,7 @@ def curate_f4():
                     ##addition
                     im_f = cv2.flip(im, 1)
                     cv2.imwrite(dest_f+'/'+img.split('/')[-1], im_f)
+    print('Curated f4')
     return None
 
 def compileImagefiles(source,dest):
@@ -227,31 +233,30 @@ def test_create():
             temp = j.split('/')[-1].split('.')[0]
             cv2.imwrite(lst[i]+'/'+temp+'-'+str(count)+'.jpg',im)
             count += 1
-        
-        '''
-            im = cv2.imread(input_imgs[j],0)
-            if im.shape[0] % 2 == 1:
-                w_c = im.shape[1]
-                h_c = im.shape[0] - 1
-                im = im[:h_c,w_c-h_c:w_c]
-            else:
-                w_c = im.shape[1]
-                h_c = im.shape[0]
-                im = im[:,w_c-h_c:w_c]
-            im = cv2.resize(im, (120,120), interpolation = cv2.INTER_AREA)
-            imgs.append(im.reshape(width, height, 1))
 
-        input_images[0] = np.concatenate(imgs,axis=2)
-        input_images[0] /= 255.
+def shuffle_dirs(val_pct):
+    dirs = '/home/wilfred/Datasets/Motion/final_processed_512_512'
+    n = len(glob.glob(dirs+'/*'))
+    n_val = int(val_pct*n)
+    idxs = np.random.permutation(n)
+    print('indexes permutated')
+    return glob.glob(dirs+'/*'), idxs[n_val:], idxs[:n_val]
 
-        output_image = model_new.predict(input_images)
-        arr = output_image[0]
-        new_arr = ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype('uint8')
-        cv2.imwrite(d+'/predicted.jpg',new_arr)
-        '''
+def move_dirs(val_pct,train_dir, test_dir):
+    dirs, x, y = shuffle_dirs(val_pct)
+    train_dirs = [dirs[i] for i in x]
+    val_dirs = [dirs[i] for i in y]
+    for i in train_dirs:
+        shutil.move(i,train_dir)
+    for j in val_dirs:
+        shutil.move(j,test_dir)
+    return None
+
 if __name__ == "__main__":
 
-    curate_f1()
-    curate_f2()
-    curate_f3()
-    curate_f4()
+    #curate_f1()
+    #curate_f2()
+    #curate_f3()
+    #curate_f4()
+    
+    #move_dirs(0.2,train_dir,test_dir)

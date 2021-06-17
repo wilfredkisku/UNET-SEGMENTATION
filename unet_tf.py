@@ -1,9 +1,23 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import cv2
+import glob
+import random
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation, MaxPool2D, Conv2DTranspose, Concatenate, Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model
+
+width = 512
+height = 512
+frame_num = 3
+
+batch_size = 32
+train_dir = '/home/wilfred/Datasets/Motion/final_processed_512_512/train'
+val_dir = '/home/wilfred/Datasets/Motion/final_processed_512_512/test'
+
+######### building the model ############
 def conv_block(inputs, num_filters):
     x = Conv2D(num_filters, 3, padding='same')(inputs)
     x = BatchNormalization()(x)
@@ -26,8 +40,9 @@ def decode_block(inputs, skip_features, num_filters):
     x = conv_block(x, num_filters)
     return x
 
-def build_unet(input_shape):
-    inputs = Input(input_shape)
+def build_unet():
+    
+    inputs = Input((height, width, frame_num*3))
 
     """Encoder"""
     s1, p1 = encoder_block(inputs, 64)
@@ -50,29 +65,37 @@ def build_unet(input_shape):
 
     return model
 
+###### connect the output of mainModel to input of vgg16 model ######
 def load_vgg(mainModel):
 
+    #layers to included in the loss model
     selectedLayers = [1,2,9,10,17,18]
     
-    vggModel = tf.keras.applications.vgg16.VGG16(include_top = False, weights='imagenet', input_shape = (512, 512, 3))
-    vggModel.trainable = False
-    for layer in vggModel.layers:
+    #get the vgg16 model with the input shape as the output from the main model
+    #the vgg16 model weights should be non-trainable
+    lossModel = tf.keras.applications.vgg16.VGG16(include_top = False, weights='imagenet', input_shape = (512, 512, 3))
+    #make the vgg16 model non-trainable as it will be used for loss calculation
+    lossModel.trainable = False
+    for layer in lossModel.layers:
         layer.trainable = False
     
-    selectedOutputs = [vggModel.layers[i].output for i in selectedLayers]
-    lossModel = Model(vggModel.inputs,selectedOutputs)
+    #select the layers that will be used for loss evaluation
+    selectedOutputs = [lossModel.layers[i].output for i in selectedLayers]
+    lossModel = Model(lossModel.inputs, selectedOutputs)
+    
+    #combining the models
     lossModelOutputs = lossModel(mainModel.outputs)
-
-    fullModel = Model(mainModel.inputs, lossModelOutputs)
+    fullModel = Model(mainModel.inputs,lossModelOutputs)
 
     return fullModel
 
 def my_generator(batch, img_dir):
     dirs = glob.glob(img_dir + '/*')
+    #print(dirs)
     counter = 0
     while True:
-        input_images = np.zeros((batch, width, height, 1*4))
-        output_images = np.zeros((batch, width, height, 1))
+        input_images = np.zeros((batch, width, height, 3*frame_num))
+        output_images = np.zeros((batch, width, height, 3))
         random.shuffle(dirs)
         if (counter+batch >= len(dirs)):
             counter = 0
@@ -80,15 +103,16 @@ def my_generator(batch, img_dir):
             input_imgs = sorted(glob.glob(dirs[counter + i] + '/*'))
             imgs = []
             for j in range(len(input_imgs)-1):
-                imgs.append(cv2.imread(input_imgs[j],0).reshape(width, height, 1))
+                imgs.append(cv2.imread(input_imgs[j]).reshape(width, height, 3))
             input_images[i] = np.concatenate(imgs,axis=2)
-            output_images[i] = cv2.imread(input_imgs[4],0).reshape(width, height, 1)
+            output_images[i] = cv2.imread(input_imgs[frame_num]).reshape(width, height, 3)
 
             input_images[i] /= 255.
             output_images[i] /= 255.
 
         yield(input_images, output_images)
         counter += batch
+        
 
 def model_evaluate():
 
@@ -131,22 +155,25 @@ def model_evaluate():
     return None
 
 if __name__ == "__main__":
-    #code
-    input_shape = (512, 512, 9)
-    model = build_unet(input_shape)
-    model.summary()
-    load_vgg(model)
-    
-    #es_callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=100)
-    #model.compile(optimizer = 'adam', loss = 'mse', metric = ['mse', 'mae'])
+   
+    #generate the mainModel
+    model = build_unet()
+    #model.summary()
 
-    #cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,save_weights_only=True,verbose=1)
+    #attach the loss model
+    fullmodel = load_vgg(model)
+    fullmodel.summary()
 
-    #history = model.fit(my_generator(batch_size,train_dir), steps_per_epoch=steps_per_epoch//4, validation_steps = validation_steps//4, epochs= num_epochs, validation_data = my_generator(batch_size, val_dir), callbacks=[es_callback, cp_callback], verbose = 1)
+    es_callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=100)
+    model.compile(optimizer = 'adam', loss = 'mse', metric = ['mse', 'mae'])
 
-    #history_df = pd.DataFrame(history.history)
-    #history_df.to_csv(saved_path+'/model-history.csv')
-    #model.save(saved_path+'/model.h5')
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,save_weights_only=True,verbose=1)
+
+    history = model.fit(my_generator(batch_size,train_dir), steps_per_epoch=steps_per_epoch//4, validation_steps = validation_steps//4, epochs= num_epochs, validation_data = my_generator(batch_size, val_dir), callbacks=[es_callback, cp_callback], verbose = 1)
+
+    history_df = pd.DataFrame(history.history)
+    history_df.to_csv(saved_path+'/model-history.csv')
+    model.save(saved_path+'/model.h5')
     print('End of training ...')
 
     #model_evaluate()
